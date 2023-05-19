@@ -1,0 +1,4 @@
+general:
+  s3_bucket: tcat-linting-and-testing-workshop-746907585706
+  parameters:
+    VpcIpv4Cidr: 172.16.0.0/16

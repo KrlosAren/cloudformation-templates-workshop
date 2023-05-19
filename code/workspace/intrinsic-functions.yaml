@@ -15,6 +15,11 @@ Metadata:
         default: 'Type of EC2 Instance'
 
 Parameters:
+
+  AmiID:
+    Type: AWS::EC2::Image::Id
+    Description: "The ID of the AMI."
+
   InstanceType:
     Type: String
     Default: t2.micro
@@ -30,6 +35,11 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       # Use !Ref function in ImageId property
-      ImageId: ami-00a1270ce1e007c27
+      ImageId: !Ref AmiID
       InstanceType: !Ref InstanceType
       # Add Tags property here
+      Tags:
+        - Key : Name
+          Value: !Join [ '-', [ !Ref InstanceType, webserver ] ]
+        - Key: InstanceType 
+          Value: !Sub ${InstanceType}

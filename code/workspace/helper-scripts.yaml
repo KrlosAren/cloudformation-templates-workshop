@@ -28,6 +28,9 @@ Parameters:
     Description: 'The ID of the AMI.'
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
+  WebServerAvailabilityZone:
+    Type: AWS::EC2::AvailabilityZone::Name
+
 Mappings:
   EnvironmentToInstanceType:
     Dev:
@@ -61,26 +64,79 @@ Resources:
 
   WebServerInstance:
     Type: AWS::EC2::Instance
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: PT10M
     Metadata:
-      # 1. Add code from '1. Configure _Metadata_ section' here
-        config:
-          packages:
-            # 2. Add the code from '1. Install HTTPD and PHP packages' section here
+        AWS::CloudFormation::Init:
+          config:
+            packages:
+              yum:
+                httpd: []
+                php: []
 
-          files:
-            # 3. Add the /var/www/html/index.php file from '2. Create index.php file' section here
+            files:
+              /var/www/html/index.php:
+                content: |
+                  <!DOCTYPE html>
+                  <html>
+                  <body>
+                    <center>
+                      <?php
+                        $url = "http://169.254.169.254/latest/meta-data/instance-id";
+                        $instance_id = file_get_contents($url);
 
-            # 6. Add the /etc/cfn/cfn-hup.conf file from '3. Configure cfn-hup' section here
+                        $url = "http://169.254.169.254/latest/meta-data/placement/availability-zone";
+                        $zone = file_get_contents($url);
+                        
+                        $url = "http://169.254.169.254/latest/meta-data/ami-id";
+                        $ami_id = file_get_contents($url);
+                      ?>
+                      <h1>Hola usando scripts cloudformation!!!!</h1>                      
+                      <h2>EC2 Instance ID: <?php echo $instance_id ?></h2>
+                      <h2>AMI ID : <?php echo $ami_id ?></h2>
+                      <h2>Availability Zone : <?php echo $zone ?></h2>
+                    </center>
+                  </body>
+                  </html>
+                mode: 000644
+                owner: apache
+                group: apache
 
-            # 7. Add the /etc/cfn/hooks.d/cfn-auto-reloader.conf file from '3. Configure cfn-hup' section here
-
-          services:
-            # 4. Add the code from '3. Enable and start Apache web server' section here
-
-            # 8. Add the code from '3. Configure cfn-hup' section here
+              /etc/cfn/cfn-hup.conf:
+                content: !Sub |
+                  [main]
+                  stack=${AWS::StackId}
+                  region=${AWS::Region}
+                  interval=1
+                mode: 000400
+                owner: root
+                group: root
+              
+              /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+                content: !Sub |
+                  [cfn-auto-reloader-hook]
+                  triggers=post.update
+                  path=Resources.WebServerInstance.Metadata.AWS::CloudFormation::Init
+                  action=/opt/aws/bin/cfn-init --stack ${AWS::StackName} --resource WebServerInstance --region ${AWS::Region}
+                  runas=root
+                  
+            services:
+              sysvinit:
+                httpd:
+                  enabled: true
+                  ensureRunning: true
+            cfn-hup:
+              enabled: true
+              ensureRunning: true
+              files:
+                - /etc/cfn/cfn-hup.conf
+                - /etc/cfn/hooks.d/cfn-auto-reloader.conf
 
     Properties:
       IamInstanceProfile: !Ref WebServerInstanceProfile
+      AvailabilityZone: !Ref WebServerAvailabilityZone
       ImageId: !Ref AmiID
       InstanceType: !FindInMap [EnvironmentToInstanceType, !Ref EnvironmentType, InstanceType]
       SecurityGroupIds:
@@ -89,11 +145,14 @@ Resources:
         - Key: Name
           Value: !Join [ '-', [ !Ref EnvironmentType, webserver ] ]
       UserData:
-        # 5. Add the code from '4. Call cfn-init script' here
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            yum install -y aws-cfn-bootstrap
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServerInstance --region ${AWS::Region}
+            /opt/aws/bin/cfn-signal --exit-code $? --stack ${AWS::StackName} --resource WebServerInstance --region ${AWS::Region}
+        
 
-        # 10. Add the cfn-signal from '4. Configure cfn-signal and CreationPolicy attribute' here
-
-    # 9. Add the Creation policy parameter from '4. Configure cfn-signal and CreationPolicy attribute' here
 
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup

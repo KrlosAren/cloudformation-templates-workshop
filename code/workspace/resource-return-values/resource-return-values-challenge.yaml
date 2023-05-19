@@ -16,6 +16,8 @@ Resources:
       Tags:
         - Key: Name
           Value: Resource-return-values-workshop
+      SecurityGroups:
+          - !Ref InstanceSecurityGroup
 
   InstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -38,12 +40,12 @@ Resources:
 Outputs:
   InstanceID:
     Description: The ID of the launched instance
-    Value:
+    Value: !Ref Ec2Instance
 
   PublicIP:
     Description: Public IP of the launched instance
-    Value:
+    Value: !GetAtt Ec2Instance.PublicIp
 
   SecurityGroupId:
     Description: ID of the security group created
-    Value:
+    Value: !GetAtt InstanceSecurityGroup.GroupId
